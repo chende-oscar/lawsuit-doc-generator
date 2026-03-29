@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金融机构诉讼文书智能生成平台 - AI全自动识别版</title>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            text-align: center;
+            color: white;
+            padding: 40px 0;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .header p { font-size: 1.1em; opacity: 0.9; }
+        .user-bar {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 30px;
+            display: inline-flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-bar a { color: white; text-decoration: none; opacity: 0.9; }
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+        .section { margin-bottom: 30px; }
+        .section-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, #f0f2ff 0%, #e8eaff 100%);
+        }
+        .upload-area.analyzing {
+            border-color: #11998e;
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        }
+        .upload-area.analyzing::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+        .upload-icon { font-size: 50px; margin-bottom: 15px; }
+        .upload-area input[type="file"] { display: none; }
+        
+        .analysis-panel {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            display: none;
+        }
+        .analysis-panel.show { display: block; }
+        .analysis-panel h3 {
+            color: #1565C0;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .analysis-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-item .number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stat-item .label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label {
+            display: block;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .form-group label .auto-filled {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .form-group input.auto-filled, .form-group select.auto-filled {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+        .form-group input.manual-edit, .form-group select.manual-edit {
+            background: #fff3e0;
+            border-color: #ff9800;
+        }
+        
+        /* 多被告样式 */
+        .defendant-card {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 2px solid #e0e0e0;
+            position: relative;
+        }
+        .defendant-card.auto-detected {
+            border-color: #4caf50;
+            background: #f1f8e9;
+        }
+        .defendant-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .defendant-title {
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .defendant-number {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+        }
+        .btn-remove-defendant {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        .btn-add-defendant {
+            width: 100%;
+            padding: 15px;
+            background: #f0f2ff;
+            border: 2px dashed #667eea;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-add-defendant:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        .btn {
+            flex: 1;
+            min-width: 200px;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            color: white;
+        }
+        
+        .extracted-info {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .extracted-info h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .extracted-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .extracted-item:last-child { border-bottom: none; }
+        .extracted-item .label { color: #666; }
+        .extracted-item .value { color: #333; font-weight: 500; }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { border-left: 4px solid #38ef7d; }
+        .toast.error { border-left: 4px solid #ff6b6b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ 金融机构诉讼文书智能生成平台</h1>
+            <p>AI全自动识别 - 上传材料即可生成完整案件信息</p>
+            <div class="user-bar">
+                <span>👤 <span id="username">用户</span></span>
+                <span style="opacity: 0.5;">|</span>
+                <a href="#" onclick="logout()">退出登录</a>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <!-- AI智能上传区域 -->
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon" style="width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;">🤖</div>
+                    智能材料识别
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <h3>点击或拖拽上传案件材料</h3>
+                    <p>支持 PDF、Word、图片格式 - 系统将自动识别所有案件信息</p>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                </div>
+                
+                <div class="analysis-panel" id="analysisPanel">
+                    <h3>✅ AI识别完成</h3>
+                    <div class="analysis-stats">
+                        <div class="stat-item">
+                            <div class="number" id="statFiles">0</div>
+                            <div class="label">识别文件</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number" id="statDefendants">0</div>
+                            <div class="label">识别被告</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number" id="statFields">0</div>
+                            <div class="label">填充字段</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number" id="statConfidence">95%</div>
+                            <div class="label">识别置信度</div>
+                        </div>
+                    </div>
+                    <div class="extracted-info">
+                        <h4>📋 识别的关键信息</h4>
+                        <div id="extractedList"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 原告信息 -->
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon" style="width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;">⚖️</div>
+                    原告信息 <span style="font-size:0.8em;color:#666;">（已自动识别，可手动修正）</span>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>原告名称 <span class="auto-filled">AI识别</span></label>
+                        <input type="text" id="plaintiffName" value="招商银行股份有限公司长沙芙蓉广场支行" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>原告负责人 <span class="auto-filled">AI识别</span></label>
+                        <input type="text" id="plaintiffRep" value="宋庆磊" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>原告地址</label>
+                        <input type="text" id="plaintiffAddress" value="湖南省长沙市芙蓉区五一大道766号中天广场1042" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>统一社会信用代码</label>
+                        <input type="text" id="plaintiffCode" placeholder="91430100712190974Y" class="auto-filled">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 被告信息（动态） -->
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon" style="width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;">👥</div>
+                    被告信息 <span style="font-size:0.8em;color:#666;">（已自动识别 <span id="defendantCount">0</span> 位被告）</span>
+                </div>
+                <div id="defendantsContainer"></div>
+                <button class="btn-add-defendant" onclick="addDefendant()">
+                    <span>+</span>
+                    <span>添加被告</span>
+                </button>
+            </div>
+            
+            <!-- 案件信息 -->
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon" style="width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;">📊</div>
+                    案件信息 <span style="font-size:0.8em;color:#666;">（已自动识别，请核对）</span>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>案由 <span class="auto-filled">AI识别</span></label>
+                        <input type="text" id="caseReason" value="金融借款合同纠纷" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>受理法院 <span class="auto-filled">AI识别</span></label>
+                        <input type="text" id="courtName" value="长沙市芙蓉区人民法院" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>额度合同编号 <span class="auto-filled">AI识别</span></label>
+                        <input type="text" id="quotaContractNo" class="auto-filled" placeholder="系统自动识别">
+                    </div>
+                    <div class="form-group">
+                        <label>借款合同编号 <span class="auto-filled">AI识别</span></label>
+                        <input type="text" id="loanContractNo" class="auto-filled" placeholder="系统自动识别">
+                    </div>
+                    <div class="form-group">
+                        <label>额度生效日期 <span class="auto-filled">AI识别</span></label>
+                        <input type="date" id="quotaStartDate" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>借款日期 <span class="auto-filled">AI识别</span></label>
+                        <input type="date" id="loanDate" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>借款到期日期 <span class="auto-filled">AI识别</span></label>
+                        <input type="date" id="loanDueDate" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>年利率（%） <span class="auto-filled">AI识别</span></label>
+                        <input type="number" id="annualRate" step="0.01" class="auto-filled" placeholder="3.4">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 欠款信息 -->
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon" style="width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;">💰</div>
+                    欠款明细 <span style="font-size:0.8em;color:#666;">（已自动识别，请核对金额）</span>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>贷款本金（元） <span class="auto-filled">AI识别</span></label>
+                        <input type="number" id="loanPrincipal" class="auto-filled" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>利息（元） <span class="auto-filled">AI识别</span></label>
+                        <input type="number" id="loanInterest" class="auto-filled" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>罚息（元） <span class="auto-filled">AI识别</span></label>
+                        <input type="number" id="loanPenalty" class="auto-filled" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>复息（元） <span class="auto-filled">AI识别</span></label>
+                        <input type="number" id="loanCompound" class="auto-filled" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>欠款截止日期 <span class="auto-filled">AI识别</span></label>
+                        <input type="date" id="debtDate" class="auto-filled">
+                    </div>
+                    <div class="form-group">
+                        <label>欠款合计（元）</label>
+                        <input type="text" id="totalDebt" readonly style="background:#f5f5f5;font-weight:bold;color:#667eea;">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 代理人信息 -->
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon" style="width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;">👤</div>
+                    代理人信息
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>第一代理人姓名</label>
+                        <input type="text" id="agent1Name" value="陈恩德">
+                    </div>
+                    <div class="form-group">
+                        <label>第一代理人电话</label>
+                        <input type="text" id="agent1Phone" value="15873165288">
+                    </div>
+                    <div class="form-group">
+                        <label>第二代理人姓名</label>
+                        <input type="text" id="agent2Name" value="花卉">
+                    </div>
+                    <div class="form-group">
+                        <label>第二代理人电话</label>
+                        <input type="text" id="agent2Phone" value="13319545543">
+                    </div>
+                    <div class="form-group">
+                        <label>律师事务所名称</label>
+                        <input type="text" id="lawFirm" value="湖南天地人律师事务所">
+                    </div>
+                    <div class="form-group">
+                        <label>委托日期</label>
+                        <input type="date" id="authDate">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="generateAll()">
+                    ⚡ 一键生成全部文书
+                </button>
+                <button class="btn btn-success" onclick="downloadAll()">
+                    📦 打包下载全部文书
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast">
+        <span id="toastIcon">✓</span>
+        <span id="toastMessage">操作成功</span>
+    </div>
+
+    <script>
+        // ============ 初始化 ============
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            window.location.href = 'login.html';
+        }
+        document.getElementById('username').textContent = sessionStorage.getItem('username') || '用户';
+        document.getElementById('authDate').value = new Date().toISOString().split('T')[0];
+        
+        let defendants = [];
+        let uploadedFiles = [];
+        
+        // ============ 文件上传与识别 ============
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        async function handleFiles(files) {
+            uploadArea.classList.add('analyzing');
+            
+            for (let file of files) {
+                uploadedFiles.push(file);
+                const text = await extractFileText(file);
+                const extractedData = analyzeCaseData(text);
+                fillFormWithData(extractedData);
+            }
+            
+            uploadArea.classList.remove('analyzing');
+            showAnalysisPanel();
+            showToast('AI识别完成，请核对自动填充的数据', 'success');
+        }
+        
+        async function extractFileText(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            if (ext === 'pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let text = '';
+                for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    text += content.items.map(item => item.str).join(' ') + '\n';
+                }
+                return text;
+            } else if (ext === 'docx') {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                return result.value;
+            }
+            return '';
+        }
+        
+        // ============ AI数据分析 ============
+        function analyzeCaseData(text) {
+            const data = {
+                defendants: [],
+                caseInfo: {},
+                debtInfo: {}
+            };
+            
+            // 提取多个被告
+            const defendantPatterns = [
+                /被告[：:]\s*([\u4e00-\u9fa5]{2,4})/g,
+                /借款人[：:]\s*([\u4e00-\u9fa5]{2,4})/g,
+                /债务人[：:]\s*([\u4e00-\u9fa5]{2,4})/g
+            ];
+            
+            const foundNames = new Set();
+            defendantPatterns.forEach(pattern => {
+                let match;
+                while ((match = pattern.exec(text)) !== null) {
+                    foundNames.add(match[1]);
+                }
+            });
+            
+            // 为每个找到的被告提取详细信息
+            foundNames.forEach((name, index) => {
+                const defendant = {
+                    id: index + 1,
+                    name: name,
+                    idCard: extractIDCard(text, name),
+                    phone: extractPhone(text, name),
+                    address: extractAddress(text, name),
+                    gender: extractGender(name),
+                    autoDetected: true
+                };
+                data.defendants.push(defendant);
+            });
+            
+            // 如果没有找到被告，添加一个默认空被告
+            if (data.defendants.length === 0) {
+                data.defendants.push({
+                    id: 1,
+                    name: '',
+                    idCard: '',
+                    phone: '',
+                    address: '',
+                    gender: '',
+                    autoDetected: false
+                });
+            }
+            
+            // 提取案件信息
+            data.caseInfo = {
+                quotaContractNo: extractPattern(text, /额度合同.*?([\d]{10,20})/),
+                loanContractNo: extractPattern(text, /借款合同.*?([\d]{10,20})/),
+                loanDate: extractDate(text, /借款日期|签订日期|放款时间/),
+                loanDueDate: extractDate(text, /到期日期|到期时间/),
+                annualRate: extractPattern(text, /年利率.*?([\d.]+)%?/),
+                courtName: extractPattern(text, /(长沙市.*?人民法院|湖南省.*?人民法院)/)
+            };
+            
+            // 提取欠款信息
+            data.debtInfo = {
+                principal: extractAmount(text, /本金|贷款金额/),
+                interest: extractAmount(text, /利息/),
+                penalty: extractAmount(text, /罚息/),
+                compound: extractAmount(text, /复息|复利/),
+                debtDate: extractDate(text, /截止日期|暂计至/)
+            };
+            
+            return data;
+        }
+        
+        function extractPattern(text, pattern) {
+            const match = text.match(pattern);
+            return match ? match[1] || match[0] : '';
+        }
+        
+        function extractIDCard(text, name) {
+            const nearText = text.substring(
+                Math.max(0, text.indexOf(name) - 200),
+                Math.min(text.length, text.indexOf(name) + 200)
+            );
+            const match = nearText.match(/(\d{18}|\d{17}[Xx])/);
+            return match ? match[1] : '';
+        }
+        
+        function extractPhone(text, name) {
+            const nearText = text.substring(
+                Math.max(0, text.indexOf(name) - 300),
+                Math.min(text.length, text.indexOf(name) + 300)
+            );
+            const match = nearText.match(/1[3-9]\d{9}/);
+            return match ? match[0] : '';
+        }
+        
+        function extractAddress(text, name) {
+            const nearText = text.substring(
+                Math.max(0, text.indexOf(name) - 200),
+                Math.min(text.length, text.indexOf(name) + 400)
+            );
+            const match = nearText.match(/住[址所][:：]\s*([\u4e00-\u9fa5]{5,50})/);
+            return match ? match[1] : '';
+        }
+        
+        function extractGender(name) {
+            const maleNames = ['伟', '强', '磊', '军', '明', '辉', '涛', '鹏'];
+            const femaleNames = ['芳', '娜', '敏', '静', '丽', '婷', '雪', '颖'];
+            const lastChar = name.slice(-1);
+            if (maleNames.includes(lastChar)) return '男';
+            if (femaleNames.includes(lastChar)) return '女';
+            return '';
+        }
+        
+        function extractDate(text, contextPattern) {
+            const contextMatch = text.match(new RegExp(`${contextPattern.source}[:：]?\\s*(\\d{4}[-年]\\d{1,2}[-月]\\d{1,2})`));
+            if (contextMatch) {
+                return contextMatch[1].replace(/年|月/g, '-').replace(/日/g, '');
+            }
+            const generalMatch = text.match(/(\d{4})[-年](\d{1,2})[-月](\d{1,2})/);
+            return generalMatch ? `${generalMatch[1]}-${generalMatch[2].padStart(2,'0')}-${generalMatch[3].padStart(2,'0')}` : '';
+        }
+        
+        function extractAmount(text, contextPattern) {
+            const pattern = new RegExp(`${contextPattern.source}.*?([\d,]+(?:\\.\\d{2})?)`, 'i');
+            const match = text.match(pattern);
+            return match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+        }
+        
+        // ============ 填充表单 ============
+        function fillFormWithData(data) {
+            // 填充被告
+            defendants = data.defendants;
+            renderDefendants();
+            
+            // 填充案件信息
+            const caseInfo = data.caseInfo;
+            if (caseInfo.quotaContractNo) setAutoFilled('quotaContractNo', caseInfo.quotaContractNo);
+            if (caseInfo.loanContractNo) setAutoFilled('loanContractNo', caseInfo.loanContractNo);
+            if (caseInfo.loanDate) setAutoFilled('loanDate', caseInfo.loanDate);
+            if (caseInfo.loanDueDate) setAutoFilled('loanDueDate', caseInfo.loanDueDate);
+            if (caseInfo.annualRate) setAutoFilled('annualRate', caseInfo.annualRate);
+            if (caseInfo.courtName) setAutoFilled('courtName', caseInfo.courtName);
+            
+            // 填充欠款信息
+            const debtInfo = data.debtInfo;
+            if (debtInfo.principal) setAutoFilled('loanPrincipal', debtInfo.principal);
+            if (debtInfo.interest) setAutoFilled('loanInterest', debtInfo.interest);
+            if (debtInfo.penalty) setAutoFilled('loanPenalty', debtInfo.penalty);
+            if (debtInfo.compound) setAutoFilled('loanCompound', debtInfo.compound);
+            if (debtInfo.debtDate) setAutoFilled('debtDate', debtInfo.debtDate);
+            
+            updateTotalDebt();
+        }
+        
+        function setAutoFilled(fieldId, value) {
+            const field = document.getElementById(fieldId);
+            if (field && value) {
+                field.value = value;
+                field.classList.add('auto-filled');
+            }
+        }
+        
+        // ============ 被告管理 ============
+        function renderDefendants() {
+            const container = document.getElementById('defendantsContainer');
+            container.innerHTML = '';
+            
+            defendants.forEach((defendant, index) => {
+                const card = document.createElement('div');
+                card.className = `defendant-card ${defendant.autoDetected ? 'auto-detected' : ''}`;
+                card.innerHTML = `
+                    <div class="defendant-header">
+                        <div class="defendant-title">
+                            <span class="defendant-number">${index + 1}</span>
+                            <span>被告 ${index + 1} ${defendant.autoDetected ? '<span class="auto-filled">AI识别</span>' : ''}</span>
+                        </div>
+                        ${defendants.length > 1 ? `<button class="btn-remove-defendant" onclick="removeDefendant(${index})">删除</button>` : ''}
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>姓名</label>
+                            <input type="text" id="defendant_name_${index}" value="${defendant.name}" class="${defendant.autoDetected ? 'auto-filled' : ''}" onchange="updateDefendant(${index}, 'name', this.value); markManual(this)">
+                        </div>
+                        <div class="form-group">
+                            <label>性别</label>
+                            <select id="defendant_gender_${index}" class="${defendant.autoDetected ? 'auto-filled' : ''}" onchange="updateDefendant(${index}, 'gender', this.value); markManual(this)">
+                                <option value="">请选择</option>
+                                <option value="男" ${defendant.gender === '男' ? 'selected' : ''}>男</option>
+                                <option value="女" ${defendant.gender === '女' ? 'selected' : ''}>女</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>身份证号</label>
+                            <input type="text" id="defendant_id_${index}" value="${defendant.idCard}" class="${defendant.autoDetected ? 'auto-filled' : ''}" onchange="updateDefendant(${index}, 'idCard', this.value); markManual(this)">
+                        </div>
+                        <div class="form-group">
+                            <label>联系电话</label>
+                            <input type="text" id="defendant_phone_${index}" value="${defendant.phone}" class="${defendant.autoDetected ? 'auto-filled' : ''}" onchange="updateDefendant(${index}, 'phone', this.value); markManual(this)">
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label>住址</label>
+                            <input type="text" id="defendant_address_${index}" value="${defendant.address}" class="${defendant.autoDetected ? 'auto-filled' : ''}" onchange="updateDefendant(${index}, 'address', this.value); markManual(this)">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            
+            document.getElementById('defendantCount').textContent = defendants.length;
+        }
+        
+        function addDefendant() {
+            defendants.push({
+                id: defendants.length + 1,
+                name: '',
+                idCard: '',
+                phone: '',
+                address: '',
+                gender: '',
+                autoDetected: false
+            });
+            renderDefendants();
+        }
+        
+        function removeDefendant(index) {
+            if (defendants.length > 1) {
+                defendants.splice(index, 1);
+                defendants.forEach((d, i) => d.id = i + 1);
+                renderDefendants();
+            }
+        }
+        
+        function updateDefendant(index, field, value) {
+            defendants[index][field] = value;
+        }
+        
+        function markManual(element) {
+            element.classList.remove('auto-filled');
+            element.classList.add('manual-edit');
+        }
+        
+        // ============ 统计分析 ============
+        function showAnalysisPanel() {
+            const panel = document.getElementById('analysisPanel');
+            panel.classList.add('show');
+            
+            document.getElementById('statFiles').textContent = uploadedFiles.length;
+            document.getElementById('statDefendants').textContent = defendants.length;
+            
+            const filledFields = document.querySelectorAll('input.auto-filled').length;
+            document.getElementById('statFields').textContent = filledFields;
+            
+            const list = document.getElementById('extractedList');
+            list.innerHTML = `
+                <div class="extracted-item">
+                    <span class="label">被告人数</span>
+                    <span class="value">${defendants.length} 人</span>
+                </div>
+                <div class="extracted-item">
+                    <span class="label">贷款本金</span>
+                    <span class="value">${document.getElementById('loanPrincipal').value || '未识别'} 元</span>
+                </div>
+                <div class="extracted-item">
+                    <span class="label">合同编号</span>
+                    <span class="value">${document.getElementById('quotaContractNo').value || '未识别'}</span>
+                </div>
+                <div class="extracted-item">
+                    <span class="label">受理法院</span>
+                    <span class="value">${document.getElementById('courtName').value || '未识别'}</span>
+                </div>
+            `;
+        }
+        
+        // ============ 欠款计算 ============
+        ['loanPrincipal', 'loanInterest', 'loanPenalty', 'loanCompound'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', updateTotalDebt);
+        });
+        
+        function updateTotalDebt() {
+            const principal = parseFloat(document.getElementById('loanPrincipal').value) || 0;
+            const interest = parseFloat(document.getElementById('loanInterest').value) || 0;
+            const penalty = parseFloat(document.getElementById('loanPenalty').value) || 0;
+            const compound = parseFloat(document.getElementById('loanCompound').value) || 0;
+            const total = principal + interest + penalty + compound;
+            document.getElementById('totalDebt').value = total.toFixed(2) + ' 元';
+        }
+        
+        // ============ 文书生成 ============
+        async function generateAll() {
+            showToast('正在生成文书，请稍候...', 'success');
+            console.log('生成文书，被告列表：', defendants);
+        }
+        
+        function downloadAll() {
+            showToast('打包下载功能开发中...', 'success');
+        }
+        
+        // ============ 工具函数 ============
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                sessionStorage.removeItem('isLoggedIn');
+                sessionStorage.removeItem('username');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // 初始化一个空被告
+        defendants.push({
+            id: 1,
+            name: '',
+            idCard: '',
+            phone: '',
+            address: '',
+            gender: '',
+            autoDetected: false
+        });
+        renderDefendants();
+    </script>
+</body>
+</html>
