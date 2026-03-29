@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金融机构诉讼文书智能生成平台</title>
+    <script>
+        // 登录状态检查
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            window.location.href = 'login.html';
+        }
+    </script>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            text-align: center;
+            color: white;
+            padding: 40px 0;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .header p { font-size: 1.1em; opacity: 0.9; }
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+        .section { margin-bottom: 30px; }
+        .section-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title .icon {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+        }
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+            transform: translateY(-2px);
+        }
+        .upload-area .upload-icon { font-size: 60px; color: #667eea; margin-bottom: 20px; }
+        .upload-area h3 { color: #333; margin-bottom: 10px; }
+        .upload-area p { color: #666; font-size: 0.95em; }
+        .upload-area input[type="file"] { display: none; }
+        .file-list { margin-top: 20px; }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .file-item .file-info { display: flex; align-items: center; gap: 10px; }
+        .file-item .file-icon { font-size: 24px; }
+        .file-item .file-name { color: #333; font-weight: 500; }
+        .file-item .file-size { color: #999; font-size: 0.85em; }
+        .file-item .remove-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: background 0.3s;
+        }
+        .file-item .remove-btn:hover { background: #ff5252; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label {
+            display: block;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .form-group textarea { min-height: 100px; resize: vertical; }
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        .btn {
+            flex: 1;
+            min-width: 200px;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            color: white;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(17, 153, 142, 0.4);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        .generated-files { margin-top: 30px; }
+        .file-card {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .file-card:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+        .file-card .file-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .file-card .file-title { font-weight: 600; color: #333; font-size: 1.1em; }
+        .file-card .file-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+        .file-card .file-status.ready { background: #d4edda; color: #155724; }
+        .file-card .download-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .file-card .download-btn:hover { background: #764ba2; }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px 20px;
+            border-radius: 0 10px 10px 0;
+            margin-bottom: 20px;
+        }
+        .info-box p { color: #1565C0; font-size: 0.95em; }
+        .template-section {
+            background: #f5f5f5;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+        .template-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .template-title { font-size: 1.2em; color: #333; }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { border-left: 4px solid #38ef7d; }
+        .toast.error { border-left: 4px solid #ff6b6b; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8em; }
+            .main-content { padding: 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .btn { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ 金融机构诉讼文书智能生成平台</h1>
+            <p>纯前端版本 - 无需服务器，随时随地使用</p>
+            <div class="user-bar" style="margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.15); border-radius: 30px; display: inline-flex; align-items: center; gap: 15px;">
+                <span>👤 <span id="username">用户</span></span>
+                <span style="opacity: 0.5;">|</span>
+                <a href="#" onclick="logout()" style="color: white; text-decoration: none; opacity: 0.9;">退出登录</a>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon">📁</div>
+                    客户材料上传
+                </div>
+                <div class="info-box">
+                    <p>💡 提示：请将客户提供的所有材料（借款合同、账单、交易流水等）打包拖拽至此区域上传</p>
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📤</div>
+                    <h3>点击或拖拽文件至此处上传</h3>
+                    <p>支持 PDF、DOCX、JPG、PNG 等格式文件</p>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif">
+                </div>
+                <div class="file-list" id="fileList"></div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">
+                    <div class="icon">📝</div>
+                    案件基本信息
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>原告名称 *</label>
+                        <input type="text" id="plaintiffName" value="招商银行股份有限公司长沙芙蓉广场支行">
+                    </div>
+                    <div class="form-group">
+                        <label>原告负责人 *</label>
+                        <input type="text" id="plaintiffRep" value="宋庆磊">
+                    </div>
+                    <div class="form-group">
+                        <label>被告姓名 *</label>
+                        <input type="text" id="defendantName" placeholder="请输入被告姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>被告身份证号 *</label>
+                        <input type="text" id="defendantId" placeholder="请输入18位身份证号">
+                    </div>
+                    <div class="form-group">
+                        <label>被告联系电话</label>
+                        <input type="text" id="defendantPhone" placeholder="请输入被告联系电话">
+                    </div>
+                    <div class="form-group">
+                        <label>被告住址</label>
+                        <input type="text" id="defendantAddress" placeholder="请输入被告住址">
+                    </div>
+                    <div class="form-group">
+                        <label>贷款本金（元）*</label>
+                        <input type="number" id="loanPrincipal" placeholder="请输入贷款本金金额">
+                    </div>
+                    <div class="form-group">
+                        <label>利息（元）</label>
+                        <input type="number" id="loanInterest" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>罚息（元）</label>
+                        <input type="number" id="loanPenalty" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>复息（元）</label>
+                        <input type="number" id="loanCompound" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>欠款截止日期 *</label>
+                        <input type="date" id="debtDate" value="2026-01-23">
+                    </div>
+                    <div class="form-group">
+                        <label>额度合同编号 *</label>
+                        <input type="text" id="quotaContractNo" placeholder="例如：5733102199700002">
+                    </div>
+                    <div class="form-group">
+                        <label>借款合同编号 *</label>
+                        <input type="text" id="loanContractNo" placeholder="例如：6733102199700001">
+                    </div>
+                    <div class="form-group">
+                        <label>额度生效日期 *</label>
+                        <input type="date" id="quotaStartDate" value="2024-09-06">
+                    </div>
+                    <div class="form-group">
+                        <label>借款日期 *</label>
+                        <input type="date" id="loanDate" value="2024-09-10">
+                    </div>
+                    <div class="form-group">
+                        <label>借款到期日期 *</label>
+                        <input type="date" id="loanDueDate" value="2027-09-10">
+                    </div>
+                    <div class="form-group">
+                        <label>年利率（%）*</label>
+                        <input type="number" id="annualRate" value="3.4" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>受理法院 *</label>
+                        <input type="text" id="courtName" value="长沙市芙蓉区人民法院">
+                    </div>
+                </div>
+                
+                <div class="template-section">
+                    <div class="template-header">
+                        <span class="template-title">👤 代理人信息</span>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>第一代理人姓名 *</label>
+                            <input type="text" id="agent1Name" value="陈恩德">
+                        </div>
+                        <div class="form-group">
+                            <label>第一代理人电话 *</label>
+                            <input type="text" id="agent1Phone" value="15873165288">
+                        </div>
+                        <div class="form-group">
+                            <label>第二代理人姓名</label>
+                            <input type="text" id="agent2Name" value="花卉">
+                        </div>
+                        <div class="form-group">
+                            <label>第二代理人电话</label>
+                            <input type="text" id="agent2Phone" value="13319545543">
+                        </div>
+                        <div class="form-group">
+                            <label>律师事务所名称 *</label>
+                            <input type="text" id="lawFirm" value="湖南天地人律师事务所">
+                        </div>
+                        <div class="form-group">
+                            <label>委托日期 *</label>
+                            <input type="date" id="authDate">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" id="generateAllBtn" onclick="generateAll()">
+                    ⚡ 一键生成全部文书
+                </button>
+                <button class="btn btn-success" id="downloadAllBtn" onclick="downloadAll()" disabled>
+                    📦 打包下载全部文书
+                </button>
+            </div>
+            
+            <div class="generated-files" id="generatedFiles" style="display: none;">
+                <div class="section-title">
+                    <div class="icon">✅</div>
+                    生成结果
+                </div>
+                <div id="filesContainer"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast">
+        <span id="toastIcon">✓</span>
+        <span id="toastMessage">操作成功</span>
+    </div>
+
+    <script>
+        const { Document, Paragraph, TextRun, AlignmentType, Table, TableCell, TableRow, WidthType, BorderStyle } = docx;
+        
+        let uploadedFiles = [];
+        let generatedBlobs = {};
+        
+        // 初始化日期
+        document.getElementById('authDate').value = new Date().toISOString().split('T')[0];
+        
+        // 显示登录用户名
+        const username = sessionStorage.getItem('username') || '用户';
+        document.getElementById('username').textContent = username;
+        
+        // 退出登录
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                sessionStorage.removeItem('isLoggedIn');
+                sessionStorage.removeItem('username');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // 文件上传处理
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        function handleFiles(files) {
+            for (let file of files) uploadedFiles.push(file);
+            renderFileList();
+            showToast('文件上传成功', 'success');
+        }
+        
+        function renderFileList() {
+            fileList.innerHTML = uploadedFiles.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <span class="file-icon">${getFileIcon(file.name)}</span>
+                        <div>
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${formatFileSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <button class="remove-btn" onclick="removeFile(${index})">删除</button>
+                </div>
+            `).join('');
+        }
+        
+        function removeFile(index) { uploadedFiles.splice(index, 1); renderFileList(); }
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = { pdf: '📄', doc: '📝', docx: '📝', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️' };
+            return icons[ext] || '📎';
+        }
+        function formatFileSize(bytes) { if (bytes === 0) return '0 Bytes'; const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; }
+        
+        function getFormData() {
+            return {
+                plaintiff_name: document.getElementById('plaintiffName').value,
+                plaintiff_rep: document.getElementById('plaintiffRep').value,
+                defendant_name: document.getElementById('defendantName').value,
+                defendant_id: document.getElementById('defendantId').value,
+                defendant_phone: document.getElementById('defendantPhone').value,
+                defendant_address: document.getElementById('defendantAddress').value,
+                loan_principal: document.getElementById('loanPrincipal').value,
+                loan_interest: document.getElementById('loanInterest').value || '0',
+                loan_penalty: document.getElementById('loanPenalty').value || '0',
+                loan_compound: document.getElementById('loanCompound').value || '0',
+                debt_date: document.getElementById('debtDate').value,
+                quota_contract_no: document.getElementById('quotaContractNo').value,
+                loan_contract_no: document.getElementById('loanContractNo').value,
+                quota_start_date: document.getElementById('quotaStartDate').value,
+                loan_date: document.getElementById('loanDate').value,
+                loan_due_date: document.getElementById('loanDueDate').value,
+                annual_rate: document.getElementById('annualRate').value,
+                court_name: document.getElementById('courtName').value,
+                agent1_name: document.getElementById('agent1Name').value,
+                agent1_phone: document.getElementById('agent1Phone').value,
+                agent2_name: document.getElementById('agent2Name').value,
+                agent2_phone: document.getElementById('agent2Phone').value,
+                law_firm: document.getElementById('lawFirm').value,
+                auth_date: document.getElementById('authDate').value
+            };
+        }
+        
+        function validateForm() {
+            const required = ['plaintiffName', 'plaintiffRep', 'defendantName', 'defendantId', 'loanPrincipal', 'quotaContractNo', 'loanContractNo', 'courtName', 'agent1Name', 'lawFirm'];
+            for (let id of required) {
+                if (!document.getElementById(id).value.trim()) {
+                    showToast('请填写所有必填项', 'error');
+                    document.getElementById(id).focus();
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        async function generateAll() {
+            if (!validateForm()) return;
+            const btn = document.getElementById('generateAllBtn');
+            btn.disabled = true; btn.innerHTML = '⏳ 正在生成...';
+            
+            const data = getFormData();
+            
+            try {
+                generatedBlobs.indictment = await generateIndictment(data);
+                generatedBlobs.authorization = await generateAuthorization(data);
+                generatedBlobs.evidence = await generateEvidence(data);
+                
+                renderGeneratedFiles();
+                document.getElementById('generatedFiles').style.display = 'block';
+                document.getElementById('downloadAllBtn').disabled = false;
+                showToast('文书生成成功！', 'success');
+            } catch (e) {
+                showToast('生成失败：' + e.message, 'error');
+            } finally {
+                btn.disabled = false; btn.innerHTML = '⚡ 一键生成全部文书';
+            }
+        }
+        
+        async function generateIndictment(data) {
+            const principal = parseFloat(data.loan_principal);
+            const interest = parseFloat(data.loan_interest);
+            const penalty = parseFloat(data.loan_penalty);
+            const compound = parseFloat(data.loan_compound);
+            const total = principal + interest + penalty + compound;
+            
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            text: '民事起诉状',
+                            heading: docx.HeadingLevel.TITLE,
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 400 }
+                        }),
+                        new Paragraph({ text: `原告：${data.plaintiff_name}，住所地湖南省长沙市芙蓉区五一大道766号中天广场1042。`, spacing: { after: 100 } }),
+                        new Paragraph({ text: `负责人：${data.plaintiff_rep}，行长。`, spacing: { after: 200 } }),
+                        new Paragraph({
+                            text: `被告：${data.defendant_name}，${data.defendant_address ? '住' + data.defendant_address + '，' : ''}公民身份号码：${data.defendant_id}${data.defendant_phone ? '，联系电话：' + data.defendant_phone : ''}。`,
+                            spacing: { after: 200 }
+                        }),
+                        new Paragraph({ text: '诉讼请求：', spacing: { after: 100 }, bold: true }),
+                        new Paragraph({
+                            text: `1、判令被告立即偿还原告贷款本金${principal.toFixed(2)}元、利息${interest.toFixed(2)}元、罚息${penalty.toFixed(2)}元、复息${compound.toFixed(2)}元，合计${total.toFixed(2)}元(暂计至${data.debt_date}），后续利息、罚息、复息按合同约定计算至实际清偿日止;`,
+                            spacing: { after: 100 }
+                        }),
+                        new Paragraph({
+                            text: '2、请求判令被告承担律师代理费、诉讼费、仲裁费、执行费、送达费、公告费、差旅费等原告因实现债权和担保权利所发生的涉案相关费用。',
+                            spacing: { after: 100 }
+                        }),
+                        new Paragraph({ text: `暂合计为${total.toFixed(2)}元。`, spacing: { after: 200 } }),
+                        new Paragraph({ text: '事实与理由：', spacing: { after: 100 }, bold: true }),
+                        new Paragraph({
+                            text: `${data.quota_start_date}，被告通过闪电贷线上贷款服务平台在线签署了编号为${data.quota_contract_no}的《"闪电贷"额度合同(建额）},额度列表上体现额度金额为${principal.toFixed(2)}元，额度期限为240个月，生效日为${data.quota_start_date}，额度到期日为${parseInt(data.quota_start_date.split('-')[0]) + 20}年${data.quota_start_date.split('-')[1]}月${data.quota_start_date.split('-')[2]}日。单笔贷款的贷款金额、期限等要素的审批结果详见"贷款要素列表"，若"贷款要素列表"的贷款要素和招商银行股份有限公司系统中记录的存在冲突，以招商银行股份有限公司系统记录为准。`,
+                            spacing: { after: 100 }, alignment: AlignmentType.JUSTIFIED
+                        }),
+                        new Paragraph({
+                            text: `${data.loan_date}，被告通过闪电贷线上贷款服务平台在线签署了编号为${data.loan_contract_no}的《"闪电贷"借款合同(提款）》。合同约定贷款金额为${principal.toFixed(2)}元，贷款期限为36期，放款时间为${data.loan_date}，到期时间为${data.loan_due_date}，还款方式为按月付息，按计划还本，${data.loan_date}至${data.loan_due_date}执行年利率为${data.annual_rate}%。`,
+                            spacing: { after: 100 }, alignment: AlignmentType.JUSTIFIED
+                        }),
+                        new Paragraph({
+                            text: '上述合同均约定如借款人未按合同约定按时足额偿还贷款的，贷款人有权对其未偿还的贷款本金按日在本合同执行利率水平上加收50%计收罚息，直至贷款本息清偿完毕为止；对不能按时支付的利息，按罚息利率按日计收复息；合同还约定，未按时足额偿还贷款本息的，贷款人有权宣布合同提前到期，并提前收回已发放贷款的本息并要求支付相关费用。在借款人不能按期归还本合同项下贷款本息和偿付应付费用情况下，贷款人为实现债权而支付的律师费、诉讼费、仲裁费、执行费、差旅费等所有费用，均由借款人全数负担。借款人违约时，贷款人有权宣布合同提前到期，借款人另需承担贷款人为实现债权而支付的律师费、诉讼费等费用。',
+                            spacing: { after: 100 }, alignment: AlignmentType.JUSTIFIED
+                        }),
+                        new Paragraph({
+                            text: `招商银行股份有限公司依约向被告发放贷款，但被告未按合同约定按时偿还贷款本息已构成根本违约，原告有权宣布合同提前到期并要求被告立即偿还该合同项下全部贷款本息并支付实现债权的全部费用。截至${data.debt_date}，被告尚欠原告贷款本金${principal.toFixed(2)}元、利息${interest.toFixed(2)}元、罚息${penalty.toFixed(2)}元、复息${compound.toFixed(2)}元。`,
+                            spacing: { after: 100 }, alignment: AlignmentType.JUSTIFIED
+                        }),
+                        new Paragraph({
+                            text: `依据招商银行股份有限公司内部授权及管理，由原告负责湖南省区域内具体"闪电贷"贷款业务受理、管理事宜，并以自己的名义向有管辖权的法院即${data.court_name}提起诉讼。`,
+                            spacing: { after: 100 }, alignment: AlignmentType.JUSTIFIED
+                        }),
+                        new Paragraph({ text: '综上，原告特诉至贵院，请求判如所请！', spacing: { after: 200 } }),
+                        new Paragraph({ text: '此致', spacing: { after: 100 } }),
+                        new Paragraph({ text: data.court_name, spacing: { after: 300 } }),
+                        new Paragraph({ text: `具状人：${data.plaintiff_name}`, alignment: AlignmentType.RIGHT, spacing: { after: 100 } }),
+                        new Paragraph({ text: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }), alignment: AlignmentType.RIGHT })
+                    ]
+                }]
+            });
+            
+            return await docx.Packer.toBlob(doc);
+        }
+        
+        async function generateAuthorization(data) {
+            const authDate = new Date(data.auth_date);
+            const endDate = new Date(authDate);
+            endDate.setMonth(endDate.getMonth() + 6);
+            
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            text: '授权委托书',
+                            heading: docx.HeadingLevel.TITLE,
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 400 }
+                        }),
+                        new Paragraph({ text: `委托单位：${data.plaintiff_name}`, spacing: { after: 100 } }),
+                        new Paragraph({ text: `负责人：${data.plaintiff_rep}             职务：行长`, spacing: { after: 200 } }),
+                        new Paragraph({ text: '受委托人：', spacing: { after: 100 }, bold: true }),
+                        new Paragraph({ text: `姓名：${data.agent1_name}               职务：律师 ${data.agent1_phone}`, spacing: { after: 50 } }),
+                        new Paragraph({ text: `    单位：${data.law_firm}`, spacing: { after: 100 } }),
+                        ...(data.agent2_name ? [
+                            new Paragraph({ text: `    姓名：${data.agent2_name}                 职务：律师 ${data.agent2_phone || ''}`, spacing: { after: 50 } }),
+                            new Paragraph({ text: `单位：${data.law_firm}`, spacing: { after: 200 } })
+                        ] : []),
+                        new Paragraph({
+                            text: `    现委托上列受委托人在我行与${data.defendant_name}金融借款合同纠纷一案中作为我行一审诉讼阶段代理人。`,
+                            spacing: { after: 200 }
+                        }),
+                        new Paragraph({ text: `代理人${data.agent1_name}的代理权限为：一般代理。`, spacing: { after: 100 } }),
+                        ...(data.agent2_name ? [new Paragraph({ text: `代理人${data.agent2_name}的代理权限为：一般代理。`, spacing: { after: 100 } })] : []),
+                        new Paragraph({
+                            text: `代理期限为6个月，即自${authDate.getFullYear()}年${authDate.getMonth() + 1}月${authDate.getDate()}日起至${endDate.getFullYear()}年${endDate.getMonth() + 1}月${endDate.getDate()}日止。`,
+                            spacing: { after: 300 }
+                        }),
+                        new Paragraph({ text: `委托单位：${data.plaintiff_name}`, spacing: { after: 100 } }),
+                        new Paragraph({ text: data.auth_date.replace(/-/g, '年').replace(/年(\d+)$/, '年$1日'), spacing: { before: 200 } })
+                    ]
+                }]
+            });
+            
+            return await docx.Packer.toBlob(doc);
+        }
+        
+        async function generateEvidence(data) {
+            const table = new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                    new TableRow({
+                        children: [
+                            new TableCell({ children: [new Paragraph({ text: '序号', bold: true, alignment: AlignmentType.CENTER })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+                            new TableCell({ children: [new Paragraph({ text: '证据名称', bold: true, alignment: AlignmentType.CENTER })], width: { size: 45, type: WidthType.PERCENTAGE } }),
+                            new TableCell({ children: [new Paragraph({ text: '证明目的', bold: true, alignment: AlignmentType.CENTER })], width: { size: 45, type: WidthType.PERCENTAGE } })
+                        ]
+                    }),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '1', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('户口信息')] }),
+                        new TableCell({ children: [new Paragraph('被告在招商银行开办银行卡，并开通该张银行卡的网上银行及手机银行功能')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '2', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('业务功能开通维护表')] }),
+                        new TableCell({ children: [new Paragraph('被告在招商银行开办银行卡，并开通该张银行卡的网上银行及手机银行功能')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '3', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph(`额度合同（${data.quota_contract_no}）及电子数据存证证书、数字证书签名验证报告`)] }),
+                        new TableCell({ children: [new Paragraph('被告申请办理招商银行闪电贷及现欠付的具体事实和欠款金额组成')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '4', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('贷款申请记录')] }),
+                        new TableCell({ children: [new Paragraph('被告申请办理招商银行闪电贷及现欠付的具体事实和欠款金额组成')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '5', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph(`借款合同（${data.loan_contract_no}）及电子数据存证证书、数字证书签名验证报告`)] }),
+                        new TableCell({ children: [new Paragraph('被告申请办理招商银行闪电贷及现欠付的具体事实和欠款金额组成')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '6', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('贷款账单')] }),
+                        new TableCell({ children: [new Paragraph('被告申请办理招商银行闪电贷及现欠付的具体事实和欠款金额组成')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '7', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('扣款明细')] }),
+                        new TableCell({ children: [new Paragraph('被告申请办理招商银行闪电贷及现欠付的具体事实和欠款金额组成')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '8', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('账户交易流水')] }),
+                        new TableCell({ children: [new Paragraph('被告申请办理招商银行闪电贷及现欠付的具体事实和欠款金额组成')] })
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ text: '9', alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph('授权委托书')] }),
+                        new TableCell({ children: [new Paragraph('原告系适格诉讼主体')] })
+                    ]})
+                ]
+            });
+            
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            text: '证据目录',
+                            heading: docx.HeadingLevel.TITLE,
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 400 }
+                        }),
+                        table,
+                        new Paragraph({ spacing: { before: 400 } }),
+                        new Paragraph({ text: `提交人：${data.plaintiff_name}`, spacing: { after: 100 } }),
+                        new Paragraph({ text: `${new Date().getFullYear()}年    月    日`, alignment: AlignmentType.RIGHT })
+                    ]
+                }]
+            });
+            
+            return await docx.Packer.toBlob(doc);
+        }
+        
+        function renderGeneratedFiles() {
+            const container = document.getElementById('filesContainer');
+            const files = [
+                { key: 'indictment', name: '民事起诉状.docx', icon: '📄', desc: '包含完整的诉讼请求和事实理由' },
+                { key: 'evidence', name: '证据目录.docx', icon: '📋', desc: '标准格式的证据清单表格' },
+                { key: 'authorization', name: '授权委托书.docx', icon: '📜', desc: '律师代理授权委托书' }
+            ];
+            
+            container.innerHTML = files.map(file => `
+                <div class="file-card">
+                    <div class="file-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 30px;">${file.icon}</span>
+                            <div>
+                                <div class="file-title">${file.name}</div>
+                                <div style="color: #666; font-size: 0.9em; margin-top: 3px;">${file.desc}</div>
+                            </div>
+                        </div>
+                        <span class="file-status ready">✓ 已生成</span>
+                    </div>
+                    <button class="download-btn" onclick="downloadSingle('${file.key}', '${file.name}')">
+                        ⬇️ 下载文件
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        function downloadSingle(key, filename) {
+            saveAs(generatedBlobs[key], filename);
+        }
+        
+        async function downloadAll() {
+            const btn = document.getElementById('downloadAllBtn');
+            btn.disabled = true; btn.innerHTML = '⏳ 打包中...';
+            
+            try {
+                const zip = new JSZip();
+                const data = getFormData();
+                
+                zip.file('民事起诉状.docx', generatedBlobs.indictment);
+                zip.file('授权委托书.docx', generatedBlobs.authorization);
+                zip.file('证据目录.docx', generatedBlobs.evidence);
+                
+                const content = await zip.generateAsync({ type: 'blob' });
+                saveAs(content, `${data.defendant_name}_诉讼材料.zip`);
+                showToast('打包下载成功！', 'success');
+            } catch (e) {
+                showToast('打包失败：' + e.message, 'error');
+            } finally {
+                btn.disabled = false; btn.innerHTML = '📦 打包下载全部文书';
+            }
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const msg = document.getElementById('toastMessage');
+            toast.className = 'toast ' + type;
+            icon.textContent = type === 'success' ? '✓' : '✗';
+            msg.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
