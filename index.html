@@ -4,12 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>金融机构诉讼文书智能生成平台</title>
-    <script>
-        // 登录状态检查
-        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
-            window.location.href = 'login.html';
-        }
-    </script>
     <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -263,11 +257,6 @@
         <div class="header">
             <h1>🏛️ 金融机构诉讼文书智能生成平台</h1>
             <p>纯前端版本 - 无需服务器，随时随地使用</p>
-            <div class="user-bar" style="margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.15); border-radius: 30px; display: inline-flex; align-items: center; gap: 15px;">
-                <span>👤 <span id="username">用户</span></span>
-                <span style="opacity: 0.5;">|</span>
-                <a href="#" onclick="logout()" style="color: white; text-decoration: none; opacity: 0.9;">退出登录</a>
-            </div>
         </div>
         
         <div class="main-content">
@@ -433,19 +422,6 @@
         
         // 初始化日期
         document.getElementById('authDate').value = new Date().toISOString().split('T')[0];
-        
-        // 显示登录用户名
-        const username = sessionStorage.getItem('username') || '用户';
-        document.getElementById('username').textContent = username;
-        
-        // 退出登录
-        function logout() {
-            if (confirm('确定要退出登录吗？')) {
-                sessionStorage.removeItem('isLoggedIn');
-                sessionStorage.removeItem('username');
-                window.location.href = 'login.html';
-            }
-        }
         
         // 文件上传处理
         const uploadArea = document.getElementById('uploadArea');
